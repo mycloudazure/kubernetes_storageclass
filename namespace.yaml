@@ -1,0 +1,140 @@
+
+# kubectl config set-context --current --namespace=besant
+
+ # mkdir -p /root/authentication/
+ # cp /etc/kubernetes/pki/ca.crt  /root/authentication/
+ # cp /etc/kubernetes/pki/ca.key /root/authentication/
+
+
+------------------
+
+#!/bin/sh
+
+echo Please input the namespace name?
+read namespace
+echo namespace is $namespace
+
+doublequote=\"\"
+echo doublequote is $doublequote
+
+mkdir -p /root/authentication/$namespace
+cd /root/authentication/$namespace
+
+kubectl create namespace $namespace
+
+openssl genrsa -out $namespace.key 2048
+openssl req -new -key $namespace.key -out $namespace.csr -subj "/CN=$namespace/O=$namespace"
+
+openssl x509 -req -in $namespace.csr -CA ../ca.crt -CAkey ../ca.key -CAcreateserial -out $namespace.crt -days 500
+
+kubectl config set-credentials $namespace --client-certificate=./$namespace.crt  --client-key=./$namespace.key
+
+kubectl config set-context $namespace --cluster=kubernetes --namespace=$namespace --user=$namespace
+
+echo "
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: $namespace
+  name: deployment-manager
+rules:
+- apiGroups:
+  - $doublequote
+  - extensions
+  - apps
+  resources:
+  - deployments
+  - replicasets
+  - configmaps
+  - endpoints
+  - persistentvolumeclaims
+  - pods/exec
+  - pods
+  - pods/log
+  - pods/status
+  - replicationcontrollers
+  - replicationcontrollers/scale
+  - serviceaccounts
+  - services
+  - daemonsets
+  - ingresses
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+" > $namespace-roledeployment.yaml 
+
+kubectl create -f $namespace-roledeployment.yaml
+
+echo "
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1beta1
+metadata:
+  name: deployment-manager-binding
+  namespace: $namespace
+subjects:
+- kind: User
+  name: $namespace
+  apiGroup: $doublequote
+roleRef:
+  kind: Role
+  name: deployment-manager
+  apiGroup: $doublequote
+" > $namespace-rolebinding.yaml 
+
+kubectl create -f $namespace-rolebinding.yaml
+
+
+echo " 
+apiVersion: v1
+clusters:
+- cluster:
+    insecure-skip-tls-verify: true
+    server: https://10.73.100.100:6443
+  name: kubernetes
+contexts:
+- context:
+    cluster: kubernetes
+    namespace: $namespace
+    user: $namespace
+  name: $namespace
+current-context: $namespace
+kind: Config
+preferences: {}
+users:
+- name: $namespace
+  user:
+    client-certificate: $namespace.crt
+    client-key: $namespace.key
+" > config
+
+ 
+ -----------------------------
+ 
+ # == >  Install kubectl cli for clinets 
+ 
+cat >> /etc/yum.repos.d/kubernetes.repo <<EOF
+[kubernetes]
+name=Kubernetes
+baseurl=https://mirrors.aliyun.com/kubernetes/yum/repos/kubernetes-el7-x86_64/
+enabled=1
+gpgcheck=0
+EOF
+
+yum install -y kubectl-1.21.2
+ 
+
+mkdir /root/.kube
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,147 @@
+What Is a Kubernetes ConfigMap?
+A Kubernetes ConfigMap is an API object that allows you to store data as key-value pairs. Kubernetes pods can use ConfigMaps as configuration files, environment variables or command-line arguments.
+
+ConfigMaps allow you to decouple environment-specific configurations from containers to make applications portable. However, they are not suitable for confidential data storage. ConfigMaps are not encrypted in any way, and all data they contain is visible to anyone who can access the file. You can use Kubernetes secrets to store sensitive information.
+
+Another potential drawback of ConfigMaps is that files must be limited to 1MB. Larger datasets may require different storage methods, such as separate file mounts, file services or databases.
+
+Related content: read our guide to Kubernetes architecture ›
+
+Creating and Viewing ConfigMaps
+The code examples in this section were shared in the Kubernetes documentation.
+
+Creating a ConfigMap
+To create a new ConfigMap, use this kubectl command:
+
+kubectl create configmap <name> <data-source>
+
+The <name> is the name of the ConfigMap, which should be valid for use as a DNS subdomain. The <data-source> indicates the files or values from which ConfigMap data should be obtained.
+
+You can create ConfigMaps based on one file, several files, directories, or env-files (lists of environment variables). The basename of each file is used as the key, and the contents of the file becomes the value.
+
+ConfigMap Data Source	Example kubectl command
+Single file	kubectl create configmap app-settings --from-file=app-container/settings/app.properties
+Multiple files	kubectl create configmap app-settings --from-file=app-container/settings/app.properties--from-file=app-container/settings/backend.properties
+Env-file	kubectl create configmap app-env-file--from-env-file=app-container/settings/app-env-file.properties
+Directory	kubectl create configmap app-settings --from-file=app-container/settings/
+
+
+
+Viewing a ConfigMap
+
+To view the data in a ConfigMap via console output, use the command:
+
+kubectl describe configmaps <name>
+
+The output looks like this. Each key, which was created based on a filename, is followed by the separator “—-”. In this example the ConfigMap was created from two files, game.properties and ui.properties.
+
+
+
+
+
+#
+Name:         game-config-2
+Namespace:    default
+Labels:       <none>
+Annotations:  <none>
+
+Data
+====
+game.properties:
+----
+enemies=aliens
+lives=3
+enemies.cheat=true
+enemies.cheat.level=noGoodRotten
+secret.code.passphrase=UUDDLRLRBABAS
+secret.code.allowed=true
+secret.code.lives=30
+ui.properties:
+----
+color.good=purple
+color.bad=yellow
+allow.textmode=true
+how.nice.to.look=fairlyNice
+-----------------------------------
+
+To view the ConfigMap in YAML format, use this command:
+
+kubectl get configmaps <name> -o yaml
+
+The output looks like this:
+
+# kubectl get configmaps myconfig -o yaml
+apiVersion: v1
+data:
+  myconfig: |
+    Name:         game-config
+    Namespace:    default
+    Labels:       <none>
+    Annotations:  <none>
+
+    Data
+    ====
+    game.properties:
+    ----
+    enemies=aliens
+    lives=3
+    enemies.cheat=true
+    enemies.cheat.level=noGoodRotten
+    secret.code.passphrase=UUDDLRLRBABAS
+    secret.code.allowed=true
+    secret.code.lives=30
+    ui.properties:
+    ----
+    color.good=purple
+    color.bad=yellow
+    allow.textmode=true
+    how.nice.to.look=fairlyNice
+kind: ConfigMap
+metadata:
+  creationTimestamp: "2023-01-15T05:03:10Z"
+  name: myconfig
+  namespace: besant
+  resourceVersion: "12454"
+  uid: 541bebb5-b55d-4447-a8ab-6bf1da155c9b
+
+----------------------------
+
+How to Consume Kubernetes ConfigMaps
+There are three main ways to ConfigMaps can be accessed:
+
+Mounting a ConfigMap as a data volume
+Accessing the ConfigMap remotely by pods in the same namespace
+Defining a ConfigMap separately from pods and using them for other components of the Kubernetes cluster
+Using ConfigMaps as Files from a Pod 
+To ingest a ConfigMap in a volume within a pod:
+
+Use an existing ConfigMap or create a new one. The same ConfigMap can be referenced by multiple pods.
+Modify the definition of your pod, adding a volume under .spec.volumes[]. Name the volume and set a .spec.volumes[].configMap.name field to reference the ConfigMap object.
+Add a .spec.containers[].volumeMounts[] to every container using the ConfigMap. Specify .spec.containers[].volumeMounts[].readOnly = true and set .spec.containers[].volumeMounts[].mountPath to a path where the ConfigMap should be mounted.
+Each key in the ConfigMap will now become a file in the mounted directory. To access the data, change your command line instructions to look for files in the directory matching the keys in the ConfigMap.
+See the example below.
+
+
+
+vi pod.yaml
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: mypod
+  labels:
+    apps: mypod
+spec:
+  containers:
+    - name: mypod
+      image: redis
+      imagePullPolicy: IfNotPresent
+      volumeMounts:
+      - name: myconfig
+        mountPath: "/etc/myconfig"
+        readOnly: true
+  volumes:
+    - name: myconfig
+      configMap:
+      name: myconfig
+
